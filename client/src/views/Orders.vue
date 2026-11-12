@@ -74,6 +74,56 @@
           </table>
         </div>
       </div>
+
+      <div class="card submitted-card">
+        <div class="card-header">
+          <h3 class="card-title">{{ t('orders.submittedOrders') }} ({{ restockOrders.length }})</h3>
+        </div>
+        <div v-if="restockError" class="error">{{ restockError }}</div>
+        <div v-else-if="restockOrders.length === 0" class="empty-state">
+          {{ t('orders.noSubmittedOrders') }}
+        </div>
+        <div v-else class="table-container">
+          <table class="orders-table">
+            <thead>
+              <tr>
+                <th class="col-order-number">{{ t('orders.submittedTable.orderNumber') }}</th>
+                <th class="col-date">{{ t('orders.submittedTable.submittedDate') }}</th>
+                <th class="col-items">{{ t('orders.submittedTable.items') }}</th>
+                <th class="col-value">{{ t('orders.submittedTable.total') }}</th>
+                <th class="col-date">{{ t('orders.submittedTable.leadTime') }}</th>
+                <th class="col-date">{{ t('orders.submittedTable.expectedDelivery') }}</th>
+                <th class="col-status">{{ t('orders.submittedTable.status') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="order in restockOrders" :key="order.id">
+                <td class="col-order-number"><strong>{{ order.order_number }}</strong></td>
+                <td class="col-date">{{ formatDate(order.submitted_date) }}</td>
+                <td class="col-items">
+                  <details class="items-details">
+                    <summary class="items-summary">
+                      {{ t('orders.itemsCount', { count: order.items.length }) }}
+                    </summary>
+                    <div class="items-dropdown">
+                      <div v-for="item in order.items" :key="item.sku" class="item-entry">
+                        <span class="item-name">{{ item.name }}</span>
+                        <span class="item-meta">{{ item.sku }} - {{ t('orders.quantity') }}: {{ item.quantity }} @ {{ currencySymbol }}{{ formatMoneyAmount(item.unit_cost, true) }}</span>
+                      </div>
+                    </div>
+                  </details>
+                </td>
+                <td class="col-value"><strong>{{ currencySymbol }}{{ formatMoneyAmount(order.total_cost) }}</strong></td>
+                <td class="col-date">{{ t('orders.leadTimeDays', { count: order.lead_time_days }) }}</td>
+                <td class="col-date">{{ formatDate(order.expected_delivery) }}</td>
+                <td class="col-status">
+                  <span class="badge info">{{ t(`orders.submittedStatus.${order.status}`) }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -83,6 +133,14 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { api } from '../api'
 import { useFilters } from '../composables/useFilters'
 import { useI18n } from '../composables/useI18n'
+
+const parseDate = (value) => {
+  if (typeof value === 'string') {
+    const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  }
+  return new Date(value)
+}
 
 export default {
   name: 'Orders',
@@ -95,6 +153,8 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const orders = ref([])
+    const restockOrders = ref([])
+    const restockError = ref(null)
 
     // Use shared filters
     const {
@@ -124,6 +184,16 @@ export default {
       }
     }
 
+    const loadRestockOrders = async () => {
+      try {
+        restockError.value = null
+        restockOrders.value = await api.getRestockOrders()
+      } catch (err) {
+        restockError.value = t('orders.loadSubmittedError')
+        console.error('Failed to load restock orders:', err)
+      }
+    }
+
     // Watch for filter changes and reload data
     watch([selectedPeriod, selectedLocation, selectedCategory, selectedStatus], () => {
       loadOrders()
@@ -146,23 +216,41 @@ export default {
     const formatDate = (dateString) => {
       const { currentLocale } = useI18n()
       const locale = currentLocale.value === 'ja' ? 'ja-JP' : 'en-US'
-      return new Date(dateString).toLocaleDateString(locale, {
+      const date = parseDate(dateString)
+      if (isNaN(date.getTime())) return '-'
+      return date.toLocaleDateString(locale, {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
       })
     }
 
-    onMounted(loadOrders)
+    const formatMoneyAmount = (value, forceDecimals = false) => {
+      const { currentLocale } = useI18n()
+      const n = Number(value) || 0
+      const hasCents = Math.round(n * 100) % 100 !== 0
+      return n.toLocaleString(currentLocale.value === 'ja' ? 'ja-JP' : 'en-US', {
+        minimumFractionDigits: forceDecimals || hasCents ? 2 : 0,
+        maximumFractionDigits: 2
+      })
+    }
+
+    onMounted(() => {
+      loadOrders()
+      loadRestockOrders()
+    })
 
     return {
       t,
       loading,
       error,
       orders,
+      restockOrders,
+      restockError,
       getOrdersByStatus,
       getOrderStatusClass,
       formatDate,
+      formatMoneyAmount,
       currencySymbol,
       translateProductName,
       translateCustomerName
@@ -275,5 +363,15 @@ export default {
 .item-meta {
   font-size: 0.813rem;
   color: #64748b;
+}
+.submitted-card {
+  margin-top: 1.5rem;
+}
+
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.938rem;
 }
 </style>
