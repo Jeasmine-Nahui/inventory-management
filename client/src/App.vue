@@ -22,6 +22,9 @@
           <router-link to="/demand" :class="{ active: $route.path === '/demand' }">
             {{ t('nav.demandForecast') }}
           </router-link>
+          <router-link to="/restocking" :class="{ active: $route.path === '/restocking' }">
+            {{ t('nav.restocking') }}
+          </router-link>
           <router-link to="/reports" :class="{ active: $route.path === '/reports' }">
             Reports
           </router-link>
@@ -196,7 +199,7 @@ body {
   margin: 0 auto;
   display: flex;
   align-items: center;
-  padding: 0 2rem;
+  padding: 0 1.5rem;
   height: 70px;
 }
 
@@ -232,11 +235,12 @@ body {
 
 .nav-tabs {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.125rem;
 }
 
 .nav-tabs a {
-  padding: 0.625rem 1.25rem;
+  padding: 0.625rem 0.5rem;
+  white-space: nowrap;
   color: #64748b;
   text-decoration: none;
   font-weight: 500;
